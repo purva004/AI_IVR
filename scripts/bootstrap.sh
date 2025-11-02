@@ -39,6 +39,7 @@ if [ ! -f "${ENV_FILE}" ]; then
 MONGO_URI="mongodb://localhost:27017/AI-IVR"
 JWT_SECRET="c9b1f7d6a3e2b4c8d9f0a1b2c3d4e5f60718293a4b5c6d7e"
 VAPI_API_KEY="9a05e800-6a2e-456b-a8c3-270f0495a201"
+VAPI_PRIVATE_KEY="31aa2da3-24ea-4a50-8d67-febb5d38dc8e"
 EOF
 else
   log ".env.local already exists – keeping current values"

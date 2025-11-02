@@ -143,6 +143,9 @@ const VoiceConsole = () => {
   const [hasCallEnded, setHasCallEnded] = useState(false)
   const [callRetryCount, setCallRetryCount] = useState(0)
   const [callError, setCallError] = useState(null)
+  const [outboundNumber, setOutboundNumber] = useState('')
+  const [placingOutboundCall, setPlacingOutboundCall] = useState(false)
+  const [outboundFeedback, setOutboundFeedback] = useState(null)
   const retryTimeoutRef = useRef(null)
 
   const { showPublicKeyInvalidMessage, setShowPublicKeyInvalidMessage } = usePublicKeyInvalid()
@@ -254,7 +257,7 @@ const VoiceConsole = () => {
           await vapi.start(assistantPayload)
         }
       } catch (error) {
-  console.error('Failed to start call', error)
+        console.error('Failed to start call', error)
 
         const issueMessages = Array.isArray(error?.error?.errors)
           ? error.error.errors
@@ -296,6 +299,72 @@ const VoiceConsole = () => {
   const endCall = useCallback(() => {
     vapi.stop()
   }, [])
+
+  const handleOutboundCall = useCallback(async () => {
+    const trimmed = outboundNumber.trim()
+
+    setOutboundFeedback(null)
+
+    if (!trimmed) {
+      setOutboundFeedback({ type: 'error', message: 'Enter a phone number with country code.' })
+
+      return
+    }
+
+    const normalized = trimmed.replace(/\s+/g, '')
+
+    if (!/^[+][0-9]{8,15}$/.test(normalized)) {
+      setOutboundFeedback({
+        type: 'error',
+        message: 'Use the international format, for example +14155552671.'
+      })
+
+      return
+    }
+
+    setPlacingOutboundCall(true)
+
+    try {
+      const response = await fetch('/api/vapi/calls/outbound', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          phoneNumber: normalized
+        })
+      })
+
+      const result = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(
+          typeof result?.message === 'string'
+            ? result.message
+            : typeof result?.error === 'string'
+            ? result.error
+            : 'Unable to start the outbound call.'
+        )
+      }
+
+      setOutboundNumber('')
+      setOutboundFeedback({
+        type: 'success',
+        message: result?.message || 'Outbound call initiated. The assistant will dial shortly.'
+      })
+    } catch (error) {
+      console.error('Failed to initiate outbound call', error)
+      setOutboundFeedback({
+        type: 'error',
+        message:
+          typeof error?.message === 'string'
+            ? error.message
+            : 'Failed to start the outbound call. Please try again.'
+      })
+    } finally {
+      setPlacingOutboundCall(false)
+    }
+  }, [outboundNumber])
 
   useEffect(() => {
     const handleCallStart = () => {
@@ -457,6 +526,57 @@ const VoiceConsole = () => {
           ) : null}
 
           {showPublicKeyInvalidMessage ? <PleaseSetYourPublicKeyMessage /> : null}
+        </section>
+        <section
+          style={{
+            padding: '28px',
+            borderRadius: '20px',
+            background: '#0d1535',
+            boxShadow: '0 20px 36px rgba(8, 15, 35, 0.4)',
+            color: '#f8fafc',
+            fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+          }}
+        >
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '12px' }}>Make a call now to your customer</h2>
+          <p style={{ fontSize: '0.95rem', opacity: 0.8, marginBottom: '18px' }}>
+            Enter a customer phone number (including the + country code) and the Airio assistant will
+            call them.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <input
+              type='tel'
+              placeholder='+14155552671'
+              value={outboundNumber}
+              onChange={event => setOutboundNumber(event.target.value)}
+              style={{
+                width: '100%',
+                padding: '14px 16px',
+                borderRadius: '12px',
+                border: '1px solid rgba(148, 163, 184, 0.3)',
+                background: 'rgba(15, 23, 42, 0.75)',
+                color: '#f8fafc',
+                fontSize: '0.95rem',
+                outline: 'none'
+              }}
+            />
+            <Button
+              label={placingOutboundCall ? 'Dialing…' : 'Make Call'}
+              onClick={handleOutboundCall}
+              isLoading={placingOutboundCall}
+              disabled={placingOutboundCall}
+            />
+          </div>
+          {outboundFeedback ? (
+            <p
+              style={{
+                marginTop: '16px',
+                fontSize: '0.9rem',
+                color: outboundFeedback.type === 'error' ? '#f87171' : '#34d399'
+              }}
+            >
+              {outboundFeedback.message}
+            </p>
+          ) : null}
         </section>
       </div>
     </main>
